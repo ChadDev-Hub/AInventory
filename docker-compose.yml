@@ -1,0 +1,73 @@
+
+services:
+  db:
+    build:
+      context: "./database"
+      dockerfile: "Dockerfile"
+    container_name: ainventory_db
+    image: chaddevhub/ainventory_db:latest
+    restart: "always"
+    env_file:
+      - ./.env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      TZ: "Asia/Manila"
+    ports:
+      - ${DB_PORT}:5432
+    profiles:
+      - "development"
+    volumes:
+      - ainventory_db_data:/var/lib/postgresql
+
+
+  backend:
+    build:
+      context: "./backend"
+      dockerfile: "Dockerfile"
+    environment:
+      - TZ=Asia/Manila
+    container_name: ainventory_backend
+    image: chaddevhub/ainventory_backend:latest
+    restart: "always"
+    env_file:
+      - ./.env
+    ports:
+      - "8006:8006"
+    profiles:
+      - "production"
+  backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    environment:
+      - TZ=Asia/Manila
+    container_name: ainventory_backend_dev
+    image: chaddevhub/ainventory_backend:dev
+    restart: "always"
+    env_file:
+      - ./.env
+    develop:
+      watch:
+        - path: ./backend
+          action: sync
+          target: /app
+          ignore:
+            - __pycache__
+            - .env
+        - path: ./backend/requirements.txt
+          action: rebuild
+    ports:
+      - "8007:8007"
+    profiles:
+      - "development"
+
+volumes:
+  ainventory_db_data:
+    name: ainventory_db_data
+
+  
+
+
+      
