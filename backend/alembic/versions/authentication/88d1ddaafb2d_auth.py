@@ -20,6 +20,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    
+    # CREATE PGTRM_EXTENSION
+    op.execute(
+    """CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    """
+    )
+    
+    # POSTGIS EXTENSION
+    op.execute(
+    """CREATE EXTENSION IF NOT EXISTS postgis;
+    """
+    )
+    
     # CREATE IDENTITY SCHEMA
     op.execute(
     """CREATE schema if not exists auth;
@@ -56,7 +69,66 @@ def upgrade() -> None:
         sa.UniqueConstraint("name", name="uq_auth_roles_name"),
         schema="auth"
     )
-
+    
+    
+    
+    
+    # ==========================================
+        # PERMISSIONS
+        # ==========================================
+    op.create_table(
+        "permissions",
+        sa.Column(
+            "id",
+            sa.SmallInteger(),
+            sa.Identity(),
+            primary_key=True
+        ),
+        sa.Column(
+            "name",
+            sa.String(50),
+            nullable=False
+        ),
+        sa.Column(
+            "description",
+            sa.String(255),
+            nullable=True
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False
+        ),
+        sa.UniqueConstraint("name", name="uq_auth_permissions_name"),
+        schema="auth"
+        )
+    # ==========================================
+        # ROLES PERMISSIONS (MANY-TO-MANY)
+    # ==========================================
+    op.create_table(
+        "roles_permissions",
+        sa.Column(
+            "role_id",
+            sa.SmallInteger(),
+            sa.ForeignKey("auth.roles.id", ondelete="CASCADE"),
+            primary_key=True
+        ),
+        sa.Column(
+            "permission_id",
+            sa.SmallInteger(),
+            sa.ForeignKey("auth.permissions.id", ondelete="CASCADE"),
+            primary_key=True
+        ),
+        sa.Column(
+            "assigned_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False
+        ),
+        schema="auth"
+    )
+    
     # ==========================================
     # USERS
     # ==========================================
@@ -109,7 +181,17 @@ def upgrade() -> None:
         sa.UniqueConstraint("username", name="uq_auth_users_username"),
         schema="auth"
     )
-
+    op.create_index(
+        "idx_auth_users_username",
+        "users",
+        ["username"],
+        unique=False,
+        schema="auth",
+        postgresql_using="gin",
+        postgresql_ops = {"username": "gin_trgm_ops"},
+        
+        if_not_exists=True
+    )
     # ==========================================
     # USER ROLES (MANY-TO-MANY)
     # ==========================================
@@ -195,12 +277,26 @@ def upgrade() -> None:
     )
 
     
-    
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    
+    
+    op.drop_index("idx_auth_users_username", schema="auth", if_exists=True)
+    
+    op.drop_table("profiles", schema="auth", if_exists=True)
+    op.drop_table("user_roles", schema="auth", if_exists=True)
+    op.drop_table("users", schema="auth", if_exists=True)
+    
+    
+    op.drop_table("roles_permissions", schema="auth", if_exists=True)
+    op.drop_table("permissions", schema="auth", if_exists=True)
+    op.drop_table("roles", schema="auth", if_exists=True)
+    
+    
+    
     op.execute(
-    """DROP schema if exists auth;
-    """
-    )
+        """DROP schema if exists auth;
+        """
+        )
